@@ -1,0 +1,22 @@
+[
+  {
+    "title": "Example Module Overview",
+    "html": "<p>Modules extend ChaosCMS by adding new features that live inside <code>/public/modules/</code>. Each module has its own folder, usually with a <code>main.php</code> file to render content and an optional <code>admin/</code> folder for back-end controls.</p>"
+  },
+  {
+    "title": "Basic Structure",
+    "html": "<pre><code>/public/modules/example/\n  +-- main.php\n  +-- admin/\n  ¦    +-- admin.php\n  +-- assets/\n       +-- placeholder.png</code></pre><p>The <code>main.php</code> file is what visitors see at <code>/example</code>. The optional <code>admin/admin.php</code> is what site admins see when they manage the module in the back end.</p>"
+  },
+  {
+    "title": "Core Guidelines",
+    "html": "<ul>\n<li>Keep everything inside the module folder (<code>/public/modules/&lt;slug&gt;/</code>).</li>\n<li>Use <code>require_once</code> to load <code>app/core/db.php</code> if you need database access.</li>\n<li>Use <code>h()</code> to safely escape user-facing output.</li>\n<li>Optional: include <code>meta.json</code> to define name, version, and description.</li>\n</ul>"
+  },
+  {
+    "title": "Admin Integration",
+    "html": "<p>If your module has an <code>admin/admin.php</code>, the CMS will automatically detect it and show an <strong>Open Admin</strong> button in the admin ? modules panel.</p>"
+  },
+  {
+    "title": "Example Code",
+    "html": "<pre><code>&lt;?php\n// /public/modules/example/main.php\nrequire_once __DIR__ . '/../../app/core/db.php';\n$db = new \\app\\core\\db();\n$conn = $db-&gt;connect();\n\n// Example output\n?><h2>Hello from Example Module</h2>\n<p>This is a working module placeholder.</p></code></pre>"
+  }
+]

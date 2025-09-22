@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Welcome",
+    "html": "<p>Please be patient as we are building the JSON driven ChaosCMS Lite Version right here on our domain.</p>"
+  },
+  {
+    "title": "Join Us?",
+    "html": "<p>Take a peek at the Codex and the Roadmap, if you have experience in JSON/PHP/MySQL and want to jump in on this project, send us a message to <strong><a href=\"mailto:devteam@chaoscms.org\">devteam at chaoscms dot org</a></strong></p>"     
+  },
+  {
+    "title": "Support",
+    "html": "<p>Once we have everything ported over and working, a form will be available, for now, use <strong><a href=\"mailto:supprot@chaoscms.org\">support at chaoscms dot org</a></strong></p>"
+  }
+]
