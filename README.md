@@ -5,7 +5,7 @@ A JSON driven lite version of the Chaos CMS
 Because Databases can and will fail from time to time, and this is portable
 
 # Why another Content Management System?
-Because most of them out there are rediculously heavy resource usage with large footprints, the ChaosCMS is small, lightweight, portable and esy to use.
+Because most of them out there are rediculously heavy resource usage with large footprints, the ChaosCMS is small, lightweight, portable and easy to use.
 
 # Why Chaos?
 Because thats how my life had been since birth, and it fits, cause this has been a very chaotic project.
