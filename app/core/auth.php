@@ -1,113 +1,197 @@
 <?php
-// /app/core/auth.php
+/**
+ * /app/core/auth.php
+ * JSON-backed auth for chaoscms-lite (no DB).
+ *
+ * Public API:
+ *   - auth_is_logged_in(): bool
+ *   - auth_user(): array|null
+ *   - auth_login(string $userOrEmail, string $pass): array [ok(bool), msg(string)]
+ *   - auth_logout(): void
+ *   - auth_register(string $username, string $pass, string $email=''): array [ok(bool), msg(string)]
+ *   - auth_require_login(string $redirect='/login'): void (redirects if not logged in)
+ */
+
 declare(strict_types=1);
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
   session_start();
 }
 
-$__AUTH_ROOT = $__AUTH_ROOT ?? dirname(__DIR__, 1);   // => /app
-$__PROJECT_ROOT = dirname($__AUTH_ROOT);              // => project root
+$__AUTH_APP  = dirname(__DIR__);     // /app
+$__AUTH_ROOT = dirname($__AUTH_APP); // project root
 
-// ---- paths ----
-function auth_users_file(): string {
-  global $__PROJECT_ROOT;
-  return $__PROJECT_ROOT . '/data/users.json';
-}
+require_once $__AUTH_APP . '/core/utility.php'; // json_read/json_write/h/redirect_to()
 
-// ---- tiny JSON helpers (atomic write) ----
-function auth_json_read(string $file, $fallback = []) {
-  if (!is_file($file)) return $fallback;
-  $raw = @file_get_contents($file);
-  if ($raw === false || $raw === '') return $fallback;
-  $j = json_decode($raw, true);
-  return (json_last_error() === JSON_ERROR_NONE) ? $j : $fallback;
-}
-function auth_json_write(string $file, $value): bool {
-  $dir = dirname($file);
-  if (!is_dir($dir)) @mkdir($dir, 0775, true);
-  $tmp = $dir . '/.tmp.' . bin2hex(random_bytes(6)) . '.json';
-  $raw = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-  if ($raw === false) return false;
-  if (@file_put_contents($tmp, $raw, LOCK_EX) === false) return false;
-  return @rename($tmp, $file);
+/* ---------------- Paths & storage ---------------- */
+
+function auth_users_path(): string {
+  $APP  = dirname(__DIR__);       // /app
+  $ROOT = dirname($APP);          // project root
+  $dir  = $ROOT . '/data';
+  if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+  return $dir . '/users.json';
 }
 
-// ---- csrf ----
-function auth_csrf_token(): string {
-  if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(16));
-  return $_SESSION['csrf'];
-}
-function auth_csrf_check(string $t): bool {
-  return isset($_SESSION['csrf']) && hash_equals($_SESSION['csrf'], $t);
+/** @return array<int, array> */
+function auth_load_all(): array {
+  $path = auth_users_path();
+  $data = json_read($path, null);
+  return (is_array($data) ? $data : []);
 }
 
-// ---- users api ----
-function auth_load_users(): array {
-  return auth_json_read(auth_users_file(), []);
+function auth_save_all(array $users): bool {
+  $path = auth_users_path();
+  return json_write($path, array_values($users));
 }
-function auth_find_user(string $username): ?array {
-  $users = auth_load_users();
-  foreach ($users as $u) {
-    if (isset($u['user']) && strcasecmp($u['user'], $username) === 0) return $u;
+
+/* ---------------- Utilities ---------------- */
+
+function auth_now(): string {
+  return gmdate('c');
+}
+
+function auth_normalize_username(string $v): string {
+  return trim($v);
+}
+
+function auth_normalize_email(string $v): string {
+  return trim(strtolower($v));
+}
+
+function auth_find_user(string $userOrEmail): ?array {
+  $u = auth_normalize_username($userOrEmail);
+  $e = auth_normalize_email($userOrEmail);
+
+  $all = auth_load_all();
+  foreach ($all as $row) {
+    $nameMatch  = isset($row['username']) && strcasecmp($row['username'], $u) === 0;
+    $emailMatch = isset($row['email'])    && $e !== '' && strtolower((string)$row['email']) === $e;
+    if ($nameMatch || $emailMatch) return $row;
   }
   return null;
 }
-function auth_save_users(array $users): bool {
-  return auth_json_write(auth_users_file(), array_values($users));
+
+function auth_hash(string $pass): string {
+  return password_hash($pass, PASSWORD_DEFAULT);
 }
 
-// ---- register / login / logout ----
-function auth_register(string $user, string $pass): array {
-  $user = trim($user);
-  if ($user === '' || $pass === '') return ['ok'=>false,'error'=>'missing_fields'];
-  if (!preg_match('~^[a-z0-9._-]{3,40}$~i', $user)) return ['ok'=>false,'error'=>'bad_username'];
+function auth_verify(string $pass, string $hash): bool {
+  return password_verify($pass, $hash);
+}
 
-  $users = auth_load_users();
-  foreach ($users as $u) {
-    if (isset($u['user']) && strcasecmp($u['user'], $user) === 0) {
-      return ['ok'=>false,'error'=>'exists'];
+/* ---------------- Session helpers ---------------- */
+
+function auth_is_logged_in(): bool {
+  return !empty($_SESSION['user']) && is_array($_SESSION['user']);
+}
+
+/** @return array|null */
+function auth_user(): ?array {
+  return auth_is_logged_in() ? $_SESSION['user'] : null;
+}
+
+function auth_set_session(array $user): void {
+  $safe = $user; // never store hash in session
+  unset($safe['pass_hash']);
+  $_SESSION['user'] = $safe;
+}
+
+/* ---------------- Public actions ---------------- */
+
+/**
+ * @return array{0:bool,1:string} [ok, msg]
+ */
+function auth_login(string $userOrEmail, string $pass): array {
+  $userOrEmail = trim($userOrEmail);
+  $pass        = (string)$pass;
+
+  if ($userOrEmail === '' || $pass === '') {
+    return [false, 'Missing username/email or password.'];
+  }
+
+  $row = auth_find_user($userOrEmail);
+  if (!$row) {
+    return [false, 'Invalid credentials.'];
+  }
+
+  $hash = (string)($row['pass_hash'] ?? '');
+  if ($hash === '' || !auth_verify($pass, $hash)) {
+    return [false, 'Invalid credentials.'];
+  }
+
+  auth_set_session($row);
+  return [true, 'OK'];
+}
+
+/**
+ * @return array{0:bool,1:string} [ok, msg]
+ */
+function auth_register(string $username, string $pass, string $email = ''): array {
+  $username = auth_normalize_username($username);
+  $email    = auth_normalize_email($email);
+  $pass     = (string)$pass;
+
+  if ($username === '' || $pass === '') {
+    return [false, 'Username and password are required.'];
+  }
+
+  $all = auth_load_all();
+
+  // Uniqueness checks
+  foreach ($all as $row) {
+    if (isset($row['username']) && strcasecmp($row['username'], $username) === 0) {
+      return [false, 'Username already exists.'];
+    }
+    if ($email !== '' && isset($row['email']) && strtolower((string)$row['email']) === $email) {
+      return [false, 'Email already in use.'];
     }
   }
-  $hash = password_hash($pass, PASSWORD_DEFAULT);
-  if ($hash === false) return ['ok'=>false,'error'=>'hash_failed'];
 
-  $users[] = [
-    'user' => $user,
-    'pass_hash' => $hash,
-    'roles' => ['admin'] // first users often admin; change later if needed
+  // First-user-is-admin guard
+  $isFirstUser = (count($all) === 0);
+  $role        = $isFirstUser ? 'admin' : 'user';
+
+  // Next ID
+  $nextId = 1;
+  foreach ($all as $row) {
+    $rid = (int)($row['id'] ?? 0);
+    if ($rid >= $nextId) $nextId = $rid + 1;
+  }
+
+  $new = [
+    'id'        => $nextId,
+    'username'  => $username,
+    'email'     => $email,
+    'role'      => $role,
+    'pass_hash' => auth_hash($pass),
+    'created'   => auth_now(),
   ];
-  if (!auth_save_users($users)) return ['ok'=>false,'error'=>'save_failed'];
-  return ['ok'=>true];
-}
 
-function auth_login(string $user, string $pass): array {
-  $u = auth_find_user($user);
-  if (!$u) return ['ok'=>false,'error'=>'invalid'];
-  if (!password_verify($pass, (string)($u['pass_hash'] ?? ''))) return ['ok'=>false,'error'=>'invalid'];
-  session_regenerate_id(true);
-  $_SESSION['auth'] = ['user'=>$u['user'], 'roles'=>$u['roles'] ?? []];
-  return ['ok'=>true];
+  $all[] = $new;
+  if (!auth_save_all($all)) {
+    return [false, 'Failed to write users.json'];
+  }
+
+  return [true, $isFirstUser ? 'Registered (first admin)' : 'Registered'];
 }
 
 function auth_logout(): void {
-  $_SESSION = [];
-  if (session_status() === PHP_SESSION_ACTIVE) {
-    session_regenerate_id(true);
-    session_destroy();
-  }
+  unset($_SESSION['user']);
 }
 
-// ---- guards / helpers ----
-function auth_user(): ?array {
-  return $_SESSION['auth'] ?? null;
-}
-function auth_check_role(string $role): bool {
-  $a = auth_user(); if (!$a) return false;
-  return in_array($role, $a['roles'] ?? [], true);
-}
-function auth_require_role(string $role): void {
-  if (!auth_check_role($role)) {
-    header('Location: /login'); exit;
+/**
+ * Redirects to $redirect if not logged in.
+ */
+function auth_require_login(string $redirect = '/login'): void {
+  if (!auth_is_logged_in()) {
+    redirect_to($redirect . '?next=' . rawurlencode($_SERVER['REQUEST_URI'] ?? '/admin'));
   }
+}
+// Back-compat shims (optional)
+if (!function_exists('is_logged_in')) {
+  function is_logged_in(): bool { return auth_is_logged_in(); }
+}
+if (!function_exists('current_user')) {
+  function current_user(): ?array { return auth_user(); }
 }

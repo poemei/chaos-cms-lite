@@ -28,9 +28,9 @@ $site = json_read($ROOT . '/data/site.json', [
 
 // Expose theme vars used by router + theme includes
 $theme     = preg_replace('~[^a-z0-9_-]~i', '', (string)($site['theme'] ?? 'chaos'));
-$THEME_DIR = $ROOT . '/public/themes/' . $theme;
-$HEADER    = $THEME_DIR . '/includes/header.php';
-$FOOTER    = $THEME_DIR . '/includes/footer.php';
+$theme_dir = $ROOT . '/public/themes/' . $theme;
+$header    = $theme_dir . '/includes/header.php';
+$footer    = $theme_dir . '/includes/footer.php';
 
 // ---- Hand off to router ----
 $router = $ROOT . '/app/router.php';

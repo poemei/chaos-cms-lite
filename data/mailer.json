@@ -1,0 +1,8 @@
+{
+  "send_from": "no-reply@yourdomain.com",
+  "smtp_host": "mail.yourdomain.com",
+  "smtp_port": "587",
+  "smtp_user": "you@yourdomain.com",
+  "smtp_pass": "#######",
+  "smtp_secure": "tls"
+}

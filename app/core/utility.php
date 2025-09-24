@@ -1,159 +1,117 @@
 <?php
-function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
-function url(string $path=''): string { return ($path && $path[0]=='/') ? $path : '/'.$path; }
+// app/core/utility.php — Lite core helpers (JSON-backed, no DB)
+declare(strict_types=1);
 
-/**
- * Render a page JSON shape:
- * {
- *   "title": "Title",
- *   "html": "<p>optional single block</p>",
- *   "sections": [{"html":"..."}, {"html":"..."}],
- *   "links": [{"label":"Codex","href":"/page/codex"}, {"label":"External","href":"https://..."}]
- * }
- */
-function render_article(array $p): string {
-  $title    = (string)($p['title'] ?? '');
-  $html     = (string)($p['html']  ?? '');
-  $sections = is_array($p['sections'] ?? null) ? $p['sections'] : [];
-  $links    = is_array($p['links'] ?? null) ? $p['links'] : [];
+/* ---------- HTML / URL ---------- */
 
-  // --- normalize code/codes at top level ---
-  $topCodes = [];
-  if (isset($p['code']) && is_string($p['code']) && $p['code'] !== '') {
-    $topCodes[] = $p['code'];
+if (!function_exists('h')) {
+  function h(string $s): string {
+    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
   }
-  if (isset($p['codes'])) {
-    if (is_string($p['codes']) && $p['codes'] !== '') {
-      $topCodes[] = $p['codes'];
-    } elseif (is_array($p['codes'])) {
-      foreach ($p['codes'] as $c) {
-        if (is_string($c) && $c !== '') $topCodes[] = $c;
-      }
-    }
-  }
-
-  $out  = '<article>';
-  if ($title !== '') $out .= '<h2>'.h($title).'</h2>';
-
-  // raw HTML (intentionally unescaped; you control JSON)
-  if ($html !== '') $out .= $html;
-
-  // render top-level code blocks (escaped)
-  foreach ($topCodes as $c) {
-    $out .= '<pre>'.h($c).'</pre>';
-  }
-
-  // sections: html + code/codes (+ optional lang class)
-  foreach ($sections as $sec) {
-    $secHtml = (string)($sec['html'] ?? '');
-    if ($secHtml !== '') $out .= $secHtml;
-
-    $lang = '';
-    if (isset($sec['lang']) && is_string($sec['lang'])) {
-      $lang = preg_replace('~[^a-z0-9_+-]~i','', $sec['lang']) ?: '';
-    }
-    $cls = $lang ? ' class="language-'.h($lang).'"' : '';
-
-    // normalize section codes
-    $secCodes = [];
-    if (isset($sec['code']) && is_string($sec['code']) && $sec['code'] !== '') {
-      $secCodes[] = $sec['code'];
-    }
-    if (isset($sec['codes'])) {
-      if (is_string($sec['codes']) && $sec['codes'] !== '') {
-        $secCodes[] = $sec['codes'];
-      } elseif (is_array($sec['codes'])) {
-        foreach ($sec['codes'] as $c) {
-          if (is_string($c) && $c !== '') $secCodes[] = $c;
-        }
-      }
-    }
-    foreach ($secCodes as $c) {
-      $out .= '<pre><code'.$cls.'>'.h($c).'</code></pre>';
-    }
-  }
-
-  // optional links list
-  if ($links) {
-    $out .= '<div class="page-links" style="margin-top:20px"><h3>Explore</h3><ul>';
-    foreach ($links as $ln) {
-      $label = h((string)($ln['label'] ?? ''));
-      $href  = (string)($ln['href']  ?? '');
-      if ($label !== '' && $href !== '') {
-        $safeHref = h($href);
-        $target   = (preg_match('#^https?://#', $href)) ? ' target="_blank" rel="noopener"' : '';
-        $out .= '<li><a href="'.$safeHref.'"'.$target.'>'.$label.'</a></li>';
-      }
-    }
-    $out .= '</ul></div>';
-  }
-
-  $out .= '</article>';
-  return $out;
 }
 
-function redirect_to($url) {
-	header('Location: '. $url);
-	exit;
+if (!function_exists('url')) {
+  function url(string $path = ''): string {
+    if ($path === '') return '/';
+    // collapse // and normalize
+    $u = '/' . ltrim($path, '/');
+    $u = preg_replace('~/{2,}~', '/', $u);
+    return $u;
+  }
 }
 
-function load_file($path) {
-	if (file_exists($path)) {
-		include $path;
-    } else {
-	    pretty_error("Missing file: <code>$path</code>");
-        exit;
-    }
-}
-
-function pretty_error($message) {
-	echo "<div style='
-    background: #1e1e1e;
-    color: #f88;
-    padding: 1.5em;
-    border: 2px solid #f00;
-    font-family: monospace;
-    margin: 2em;
-    border-radius: 10px;
-   '><strong>Error:</strong><br>$message</div>";
-        
-    $log_file = APP_ROOT . '/logs/site_errors.log'; // ?? This was missing!
-    $log_line = "[" . date('Y-m-d H:i:s') . "] $message\n";
-        
-    if (file_exists($log_file) && filesize($log_file) > 1024 * 1024) { // 1MB
-        rename($log_file, $log_file . '.' . time());
-    }
-        
-    file_put_contents($log_file, $log_line, FILE_APPEND); // ?? Was missing semicolon
-} 
-
-function throw_error($code = 500, $message = 'Unknown Error') {
-	http_response_code($code);
-        
-    $friendly = [
-      400 => 'Bad Request',
-      403 => 'Forbidden',
-      404 => 'Not Found',
-      500 => 'Internal Server Error',
-      503 => 'Service Unavailable'
-    ];
-        
-    $title = $friendly[$code] ?? 'Error';
-    pretty_error("[$code] $title: $message");
-        
-    // Optional: Log it
-    $log_line = "[" . date('Y-m-d H:i:s') . "] [$code] $title � $message\n";
-    @file_put_contents(APP_ROOT . '/logs/site_errors.log', $log_line, FILE_APPEND);
-        
+if (!function_exists('redirect_to')) {
+  function redirect_to(string $path): void {
+    header('Location: ' . url($path));
     exit;
+  }
 }
 
-  // Escape for <pre><code> blocks: keep quotes as-is, escape only &, <, >
-function codeesc(string $s): string {
-  return str_replace(
-    ['&',   '<',   '>'],
-    ['&amp;','&lt;','&gt;'],
-    $s
-  );
+/* ---------- JSON I/O ---------- */
+
+if (!function_exists('json_read')) {
+  /**
+   * Read JSON from file. Returns $fallback if missing/invalid.
+   * Strips UTF-8 BOM and tolerates invalid UTF-8.
+   */
+  function json_read(string $file, $fallback = null) {
+    if (!is_file($file)) return $fallback;
+    $raw = @file_get_contents($file);
+    if ($raw === false) return $fallback;
+    if (substr($raw, 0, 3) === "\xEF\xBB\xBF") $raw = substr($raw, 3); // BOM
+    $data = json_decode($raw, true, 512, JSON_INVALID_UTF8_SUBSTITUTE);
+    if (json_last_error() !== JSON_ERROR_NONE) return $fallback;
+    return $data;
+  }
 }
-//$out .= '<pre><code>'.codeesc($c).'</code></pre>';
+
+if (!function_exists('json_write')) {
+  /**
+   * Pretty-write JSON to file, creating parent dirs if needed.
+   */
+  function json_write(string $file, $data): bool {
+    $dir = dirname($file);
+    if (!is_dir($dir)) @mkdir($dir, 0775, true);
+    $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    if ($json === false) return false;
+    return @file_put_contents($file, $json, LOCK_EX) !== false;
+  }
+}
+
+/* ---------- RENDER ---------- */
+
+if (!function_exists('render_article')) {
+  /**
+   * Render one “article-like” block:
+   * - title: string
+   * - html: raw HTML string (already trusted by editor)
+   * - sections: optional array of {id,title,html}
+   * - links: optional array of {label,href}
+   * - codes: optional array of code strings
+   * - lang: optional language hint for <code class="language-...">
+   */
+  function render_article(array $block): string {
+    $title    = (string)($block['title'] ?? '');
+    $html     = (string)($block['html']  ?? '');
+    $sections = is_array($block['sections'] ?? null) ? $block['sections'] : [];
+    $links    = is_array($block['links']    ?? null) ? $block['links']    : [];
+    $codes    = is_array($block['codes']    ?? null) ? $block['codes']    : [];
+    $lang     = (string)($block['lang']     ?? '');
+
+    ob_start(); ?>
+    <article class="chaos-article" style="max-width:1000px;margin:16px auto;padding:0 12px">
+      <?php if ($title !== ''): ?>
+        <h2><?= h($title) ?></h2>
+      <?php endif; ?>
+
+      <?php if ($links): ?>
+        <nav class="mb-3">
+          <ul class="list-inline">
+            <?php foreach ($links as $lk): ?>
+              <li class="list-inline-item"><a href="<?= h((string)($lk['href'] ?? '#')) ?>"><?= h((string)($lk['label'] ?? 'link')) ?></a></li>
+            <?php endforeach; ?>
+          </ul>
+        </nav>
+      <?php endif; ?>
+
+      <?php if ($html !== ''): ?>
+        <div class="article-body"><?= $html ?></div>
+      <?php endif; ?>
+
+      <?php foreach ($codes as $c): ?>
+        <pre><code<?= $lang ? ' class="language-'.h($lang).'"' : '' ?>><?= htmlspecialchars($c, ENT_NOQUOTES, 'UTF-8') ?></code></pre>
+      <?php endforeach; ?>
+
+      <?php foreach ($sections as $sec): ?>
+        <section id="<?= h((string)($sec['id'] ?? '')) ?>" class="mt-4">
+          <?php if (!empty($sec['title'])): ?><h3><?= h((string)$sec['title']) ?></h3><?php endif; ?>
+          <?php if (!empty($sec['html'])): ?><div><?= (string)$sec['html'] ?></div><?php endif; ?>
+        </section>
+      <?php endforeach; ?>
+    </article>
+    <?php
+    return (string)ob_get_clean();
+  }
+}
+
+

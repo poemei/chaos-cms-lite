@@ -1,6 +1,7 @@
 {
   "name": "Chaos CMS",
-  "theme": "chaos",
+  "theme": "business",
+  "default_module": "home",
   "nav": [
     {
       "label": "Home",
@@ -13,6 +14,14 @@
     {
       "label": "Posts",
       "href": "/posts"
+    },
+    {
+      "label": "Codex",
+      "href": "/codex"
+    },
+    {
+      "label": "Roadmap",
+      "href": "/roadmap"
     }
   ]
 }
