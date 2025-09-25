@@ -1,0 +1,7 @@
+/* Example Plugin asset */
+.example-plugin-box {
+  background: #f0f8ff;
+  border: 1px solid #99c;
+  padding: 1rem;
+  margin: 1rem 0;
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Example Plugin",
+  "slug": "example",
+  "version": "1.0.0",
+  "description": "A sample plugin that shows how ChaosCMS-Lite plugins work.",
+  "author": "P. Mei",
+  "settings": {
+    "enabled": true,
+    "example_key": "default"
+  }
+}

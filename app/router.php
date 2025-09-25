@@ -1,74 +1,74 @@
 <?php
+// /app/router.php ? skinny router
 declare(strict_types=1);
-error_reporting(E_ALL);
-ini_set('display_errors','1');
 
+require_once __DIR__ . '/core/utility.php';
+
+$ROOT  = dirname(__DIR__);
 $path  = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-$parts = array_values(array_filter(explode('/', trim($path, '/'))));
+$parts = array_values(array_filter(explode('/', trim($path,'/'))));
 $seg1  = $parts[0] ?? '';
 $seg2  = $parts[1] ?? '';
 
-// core helpers (no re-defs here)
-require_once $ROOT.'/app/core/utility.php';
-if (is_file($ROOT.'/app/core/auth.php')) {
-  require_once $ROOT.'/app/core/auth.php';
-}
+// Site + theme
+$site  = json_read($ROOT.'/data/site.json', ['name'=>'chaoscms-lite','nav'=>[]]);
+$theme = $site['theme'] ?? 'chaos';
 
-// early special (no theme shell)
-if ($path === '/sitemap.xml' && is_file($ROOT.'/app/sitemap.php')) { require $ROOT.'/app/sitemap.php'; exit; }
-if ($seg1 === 'admin') {
-  $admin = $ROOT.'/app/admin/index.php';
-  if (is_file($admin)) { require $admin; exit; }
-  http_response_code(404); echo 'Admin not found'; exit;
-}
+// Special routes (no theme shell)
+if ($path === '/sitemap.xml') { require __DIR__.'/routes/sitemap.php'; exit; }
+if ($seg1 === 'contact')     { require __DIR__.'/routes/contact.php'; exit; }
+if ($seg1 === 'login' || $seg1 === 'logout' || $seg1 === 'register') { require __DIR__.'/routes/auth.php'; exit; }
+if ($seg1 === 'admin')       { require __DIR__.'/routes/admin.php'; exit; }
 
-// site + theme (only for header/footer includes)
-$site   = json_read($ROOT.'/data/site.json', []);
+// Theme header
+require $ROOT.'/public/themes/'.$theme.'/includes/header.php';
 
-// open header
-if (is_file($header)) require $header;
-
-/* ============================
-   BETWEEN HEADER & FOOTER ONLY
-   ============================ */
-
-// 1) HOME ? module (default_module or "home")
-if ($seg1 === '') {
-  $defaultMod = (string)($site['default_module'] ?? 'home');
-  $homeMain   = $ROOT.'/public/modules/'.$defaultMod.'/main.php';
-  if (is_file($homeMain)) {
-    $MODULE_ROOT = dirname($homeMain);
-    require $homeMain;
-    if (is_file($footer)) require $footer;
+/* ---------- HOME ---------- *
+ * Prefer module: /public/modules/home/main.php
+ * Fallback:      /data/pages/home.json
+ */
+if ($seg1 === '' || $seg1 === 'index.php') {
+    $modHome = $ROOT.'/public/modules/home/main.php';
+    if (is_file($modHome)) {
+        // Modules run inside the theme shell; do NOT include header/footer inside module
+        require $modHome;
+        require $ROOT.'/public/themes/'.$theme.'/includes/footer.php';
+        exit;
+    }
+    $data = json_read($ROOT.'/data/pages/home.json', ['title'=>'Home','html'=>'<p>Welcome.</p>']);
+    echo render_article($data);
+    require $ROOT.'/public/themes/'.$theme.'/includes/footer.php';
     exit;
-  }
-  // if no home module, fall through to pages handler (home.json)
 }
 
-// 2) ANY MODULE: /<module>[/...]
-if ($seg1 !== '') {
-  $modMain = $ROOT.'/public/modules/'.$seg1.'/main.php';
-  if (is_file($modMain)) {
-    $MODULE_ROOT = dirname($modMain);
-    require $modMain;
-    if (is_file($footer)) require $footer;
+// Posts
+if ($seg1 === 'posts') { require __DIR__.'/routes/posts.php'; exit; }
+
+// Explicit pages: /page/<slug>
+if ($seg1 === 'page' && $seg2 !== '') {
+    $data = json_read($ROOT.'/data/pages/'.$seg2.'.json', null);
+    echo $data ? render_article($data) : '<h2>Not found</h2>';
+    require $ROOT.'/public/themes/'.$theme.'/includes/footer.php';
     exit;
-  }
 }
 
-// 3) PAGES CATCH-ALL (/, /page/<slug>, shorthand /slug, nested /a/b/c)
-$pagesHandler = $ROOT.'/app/routes/pages.php';
-if (is_file($pagesHandler)) {
-  // provide routing context; pages.php echoes content if it finds something
-  require $pagesHandler;
-  if (is_file($footer)) require $footer;
-  exit;
+// Shorthand pages: /<slug> -> data/pages/<slug>.json
+if ($seg1 && is_file($ROOT.'/data/pages/'.$seg1.'.json')) {
+    $data = json_read($ROOT.'/data/pages/'.$seg1.'.json', null);
+    echo $data ? render_article($data) : '<h2>Not found</h2>';
+    require $ROOT.'/public/themes/'.$theme.'/includes/footer.php';
+    exit;
 }
 
-// 4) 404 (themed if available)
+// Module fallback: /<slug> -> /public/modules/<slug>/main.php
+$modMain = $ROOT.'/public/modules/'.$seg1.'/main.php';
+if ($seg1 && is_file($modMain)) {
+    require $modMain; // runs inside shell
+    require $ROOT.'/public/themes/'.$theme.'/includes/footer.php';
+    exit;
+}
+
+// 404
 http_response_code(404);
-$nf = $ROOT.'/app/routes/404.php';
-if (is_file($nf)) require $nf; else echo '<h2>404</h2><p>Page not found.</p>';
-
-// close footer
-if (is_file($footer)) require $footer;
+echo '<h2>404</h2><p>Page not found.</p>';
+require $ROOT.'/public/themes/'.$theme.'/includes/footer.php';

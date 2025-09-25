@@ -1,0 +1,16 @@
+{
+  "title": "Example Module",
+  "sections": [
+    {
+      "html": "<h2>Hello from Example Module</h2><p>This is a working module placeholder. Edit <code>main.php</code> to add your content.</p><p>The entirety of this theme and this module uses Bootstrap.</p>"
+    },
+    {
+      "title": "Routing in Modules",
+      "html": "<p>Using PHP to parse the path (<code>/your_module/slug</code>) and a <code>switch</code>.</p><pre>Router gets the input from a link in the browser or a direct URL and sets the $action variable.\n\nswitch($action) routes to the correct function within the module to provide content.</pre>"
+    },
+    {
+      "title": "main.php Source",
+      "html": "<pre>&lt;?php\n// /public/modules/example_module/main.php\n// Module-level router: decides what function to call\n\n$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';\n$parts = array_values(array_filter(explode('/', trim($path,'/'))));\n\n// Drop \"compare\"\narray_shift($parts);\n$action = $parts[0] ?? 'home';\n\nfunction home() {\n    echo '&lt;div class=\"container\"&gt;';\n    echo '&lt;h2&gt;Hello from Example Module&lt;/h2&gt;';\n    echo '&lt;p&gt;This is a working module placeholder. Edit &lt;code&gt;main.php&lt;/code&gt; to add your content.&lt;/p&gt;';\n    echo '&lt;p&gt;The entirety of this theme and this module, uses Bootstrap.&lt;/p&gt;';\n    echo '&lt;p&gt;Check out the &lt;a href=\"example_module/routing\"&gt;Routing Example&lt;/a&gt; to see how modules get routed.&lt;/p&gt;';\n    echo '&lt;/div&gt;';\n}\n\nfunction module_routing() {\n    echo '&lt;h3&gt;Routing in modules&lt;/h3&gt;';\n    echo 'Using PHP to parse the path (/your_module/slug) and a switch.&lt;br&gt;';\n    echo '&lt;pre&gt;Router gets the input from a link in the browser or a direct URL and sets the $action variable.&lt;/pre&gt;&lt;br&gt;&lt;pre&gt;Switch($action) routes to the correct function within the module to provide content&lt;/pre&gt;';\n}\n\nswitch($action) {\n    case 'home':\n    case '':\n        home();\n        break;\n\n    case 'routing':\n        module_routing();\n        break;\n\n    case 'example_module.md':\n        require __DIR__ . '/example_module.md';\n        break;\n\n    default:\n        http_response_code(404);\n        echo \"&lt;h2&gt;Not found&lt;/h2&gt;\";\n        break;\n}\n</pre>"
+    }
+  ]
+}

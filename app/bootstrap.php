@@ -14,6 +14,22 @@ define('APP_CORE', $ROOT . '/app/core');
 require_once APP_CORE . '/json_store.php';
 require_once APP_CORE . '/utility.php';      // or util.php if that's your file
 
+// --- Plugins ---
+define('PLUGINS_DIR', $ROOT . '/plugins');
+if(is_file(PLUGINS_DIR . '/loader.php')) {
+    require_once PLUGINS_DIR . '/loader.php';
+}
+require_once APP_CORE . '/hooks.php';
+add_filter('nav.render', function(array $nav){
+  $nav[] = ['label' => 'Ping', 'href' => '/hooks-ping'];
+  return $nav;
+});
+add_filter('router.claim', function($claimed, $path){
+  if ($claimed) return true;
+  if ($path === '/hooks-ping') { header('Content-Type:text/plain'); echo "OK"; return true; }
+  return false;
+});
+
 // Optional JSON datastore (safe to skip if not present)
 if (is_file(APP_CORE . '/jsondb.php')) {
   require_once APP_CORE . '/jsondb.php';
